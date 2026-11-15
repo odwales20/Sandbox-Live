@@ -1,4 +1,4 @@
-import {connect} from '../shared.js';
+import {connect} from '../shared.js?v=2';
 import {imageUrl, loadPlaylist} from '../signage.js';
 
 const image = document.getElementById('slide');

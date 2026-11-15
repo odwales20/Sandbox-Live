@@ -1,4 +1,4 @@
-import {connect,truckTotals,remainingSeconds,displayWeight} from '../shared.js';
+import {connect,truckTotals,remainingSeconds,displayWeight} from '../shared.js?v=2';
 let state=null;const screen=document.getElementById('screen'),signage=document.getElementById('signage'),cards=document.getElementById('cards');
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clock=()=>{if(!state)return;const r=remainingSeconds(state);document.getElementById('clock').textContent=`${Math.floor(r/60)}:${String(r%60).padStart(2,'0')}`};

@@ -1,5 +1,5 @@
 import {loadPlaylist} from '../signage.js';
-import {connect,configured,defaultState,cleanState,displayWeight,truckTotals,remainingSeconds} from '../shared.js';
+import {connect,configured,defaultState,cleanState,displayWeight,truckTotals,remainingSeconds} from '../shared.js?v=2';
 const el=id=>document.getElementById(id);let state=defaultState(),api=null,allowed=!configured,syncing=false;
 const setError=msg=>el('error').textContent=msg||'';
 const labelTime=sec=>`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;

@@ -1,4 +1,4 @@
-import {firebaseConfig} from './firebase-config.js';
+import {firebaseConfig} from './firebase-config.js?v=2';
 
 export const DEMO_KEY = 'sandbox-live-demo-v1';
 const DEMO_SIGNAGE_KEY = 'sandbox-live-tv2-v1';
