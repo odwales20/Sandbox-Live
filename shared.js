@@ -54,6 +54,8 @@ export async function connect(onState, onSignage, onError = console.error) {
     saveSignage: async image => setDoc(signage, {image}),
     signIn: (email, password) => authSdk.signInWithEmailAndPassword(auth, email, password),
     resetPassword: email => authSdk.sendPasswordResetEmail(auth, email),
+    verifyResetCode: code => authSdk.verifyPasswordResetCode(auth, code),
+    confirmPasswordReset: (code, password) => authSdk.confirmPasswordReset(auth, code, password),
     signOut: () => authSdk.signOut(auth),
     onAuth: callback => authSdk.onAuthStateChanged(auth, callback)
   };

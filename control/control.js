@@ -1,6 +1,6 @@
 import {firebaseConfig} from '../firebase-config.js?v=2';
 import {loadPlaylist} from '../signage.js';
-import {connect,configured,defaultState,cleanState,displayWeight,truckTotals,remainingSeconds} from '../shared.js?v=2';
+import {connect,configured,defaultState,cleanState,displayWeight,truckTotals,remainingSeconds} from '../shared.js?v=4';
 const el=id=>document.getElementById(id);let state=defaultState(),api=null,allowed=!configured,syncing=false;
 const setError=msg=>el('error').textContent=msg||'';
 const labelTime=sec=>`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
@@ -23,32 +23,82 @@ el('reset').onclick=()=>{if(!confirm('Clear all competition scores and return TV
 el('authForm').onsubmit=async e=>{e.preventDefault();setError('');try{await api.signIn(el('email').value.trim(),el('password').value);el('password').value=''}catch(err){setError(err.message)}};
 el('signOut').onclick=()=>api.signOut().catch(e=>setError(e.message));
 setInterval(()=>{el('timer').textContent=labelTime(remainingSeconds(state));if(state.status==='running'&&remainingSeconds(state)===0&&allowed&&!syncing){syncing=true;save(updated({status:'finished',remainingSeconds:0,endAt:null,finishAt:Date.now()})).finally(()=>syncing=false)}},500);
-el('repairReset').onsubmit = event => {
-  event.preventDefault();
-  setError('');
-  try {
-    const input = el('resetLink');
-    const link = new URL(input.value.trim());
-    if (link.origin !== `https://${firebaseConfig.authDomain}`
-      || link.pathname !== '/__/auth/action'
-      || link.searchParams.get('mode') !== 'resetPassword'
-      || !link.searchParams.get('oobCode')) {
-      throw new Error('Paste the full Sandbox Live password reset link from your email.');
-    }
+let resetAccount = null;
+const resetStatus = message => { el('resetStatus').textContent = message; };
 
-    const reset = new URL('/__/auth/action', link.origin);
-    reset.searchParams.set('mode', 'resetPassword');
-    reset.searchParams.set('oobCode', link.searchParams.get('oobCode'));
-    reset.searchParams.set('apiKey', firebaseConfig.apiKey);
-    reset.searchParams.set('lang', 'en');
+function resetError(error) {
+  if (error.code === 'auth/expired-action-code' || error.code === 'auth/invalid-action-code') {
+    return 'This reset link is expired or has already been used. Request a new one above.';
+  }
+  return error.message;
+}
+
+el('repairReset').onsubmit = async event => {
+  event.preventDefault();
+  resetAccount = null;
+  el('newPasswordForm').reset();
+  el('newPasswordForm').hidden = true;
+  const input = el('resetLink');
+  let link;
+  try {
+    link = new URL(input.value.trim());
+  } catch {
+    resetStatus('Paste the full Sandbox Live password reset link from your email.');
+    return;
+  }
+  const code = link.searchParams.get('oobCode');
+  if (link.origin !== `https://${firebaseConfig.authDomain}`
+    || link.pathname !== '/__/auth/action'
+    || link.searchParams.get('mode') !== 'resetPassword'
+    || !code) {
+    resetStatus('Paste the full Sandbox Live password reset link from your email.');
+    return;
+  }
+
+  const button = event.submitter;
+  button.disabled = true;
+  resetStatus('Verifying reset link…');
+  try {
+    const email = await api.verifyResetCode(code);
+    resetAccount = {code, email};
     input.value = '';
-    window.location.assign(reset.href);
+    el('newPasswordForm').hidden = false;
+    resetStatus('Enter your new password below.');
+    el('newPassword').focus();
   } catch (error) {
-    setError(error instanceof TypeError
-      ? 'Paste the full Sandbox Live password reset link from your email.'
-      : error.message);
+    resetStatus(resetError(error));
+  } finally {
+    button.disabled = false;
   }
 };
+
+el('newPasswordForm').onsubmit = async event => {
+  event.preventDefault();
+  if (!resetAccount) return;
+  const {code, email} = resetAccount;
+  const password = el('newPassword').value;
+  if (password !== el('confirmPassword').value) {
+    resetStatus('The two passwords must match.');
+    return;
+  }
+
+  const button = event.submitter;
+  const verifyButton = el('repairReset').querySelector('button');
+  button.disabled = verifyButton.disabled = true;
+  try {
+    await api.confirmPasswordReset(code, password);
+    resetAccount = null;
+    el('newPasswordForm').reset();
+    el('newPasswordForm').hidden = true;
+    el('email').value = email;
+    resetStatus('Password saved. Sign in above with your new password.');
+  } catch (error) {
+    resetStatus(resetError(error));
+  } finally {
+    button.disabled = verifyButton.disabled = false;
+  }
+};
+
 
 let signageImage = null;
 let playlist = [];
@@ -91,7 +141,7 @@ el('resetPassword').onclick = async () => {
   try {
     setError('');
     await api.resetPassword(email.value.trim());
-    el('authMessage').textContent = 'Check your inbox for a password setup link. If it shows an error, use the reset link option below.';
+    el('authMessage').textContent = 'Check your inbox for a password setup link. Copy the link from the email and paste it under Reset password here.';
   } catch (error) {
     setError(error.message);
   }
