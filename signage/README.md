@@ -1,0 +1,2 @@
+# Sandbox signage images
+Upload PNG, JPG, JPEG, WebP or GIF images to this folder. The GitHub Actions workflow regenerates `images.json` after uploads, so TV1 (when idle) and TV2 discover the images automatically. Images are displayed full-screen with aspect ratio preserved. Recommended: 1920×1080 (16:9) PNG. To avoid revealing private information, only upload artwork approved for public display. The code's MIT licence does not apply to these images.
