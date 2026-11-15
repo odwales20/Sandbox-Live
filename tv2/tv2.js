@@ -1,3 +1,4 @@
+import {watchBuild} from '../updates.js';
 import {connect} from '../shared.js?v=2';
 import {imageUrl, loadPlaylist} from '../signage.js';
 
@@ -41,3 +42,5 @@ await refresh();
 advance();
 setInterval(advance, 10000);
 setInterval(async () => { await refresh(); if (pinnedImage) advance(); }, 60000);
+
+watchBuild();

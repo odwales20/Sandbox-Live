@@ -1,3 +1,4 @@
+import {watchBuild} from '../updates.js';
 import {connect,truckTotals,remainingSeconds,displayWeight} from '../shared.js?v=2';
 let state=null;const screen=document.getElementById('screen'),signage=document.getElementById('signage'),cards=document.getElementById('cards');
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -8,3 +9,5 @@ connect(s=>{state=s;render()}).catch(e=>console.error(e));setInterval(clock,250)
 let images=[],slideIndex=0,lastSlide=0;async function loadImages(){try{const r=await fetch('../signage/images.json?ts='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error(r.status);const list=await r.json();images=Array.isArray(list)?list.filter(x=>typeof x==='string'):[];}catch(e){console.warn('Signage playlist:',e)}}
 function showSlide(){if(!images.length){document.getElementById('empty').hidden=false;document.getElementById('empty').textContent='SANDBOX CAFÉ';document.getElementById('slide').hidden=true;return}document.getElementById('empty').hidden=true;const img=document.getElementById('slide');img.hidden=false;img.src='../signage/'+images[slideIndex%images.length];img.onerror=()=>{slideIndex++;showSlide()};slideIndex++}
 loadImages().then(showSlide);setInterval(()=>{if(Date.now()-lastSlide>10000){lastSlide=Date.now();showSlide()}},1000);setInterval(loadImages,60000);
+
+watchBuild();
