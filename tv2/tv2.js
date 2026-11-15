@@ -1,1 +1,43 @@
-let images=[],index=0;const image=document.getElementById('slide'),message=document.getElementById('message');async function refresh(){try{const res=await fetch('../signage/images.json?ts='+Date.now(),{cache:'no-store'});const list=await res.json();images=Array.isArray(list)?list.filter(x=>typeof x==='string'):[];}catch(e){console.warn('No signage playlist available',e)}}function show(){if(!images.length){image.hidden=true;message.hidden=false;return}image.hidden=false;message.hidden=true;image.src='../signage/'+images[index++%images.length];image.onerror=()=>{image.hidden=true;message.hidden=false;message.textContent='SANDBOX CAFÉ'}}await refresh();show();setInterval(show,10000);setInterval(refresh,60000);
+import {connect} from '../shared.js';
+import {imageUrl, loadPlaylist} from '../signage.js';
+
+const image = document.getElementById('slide');
+const message = document.getElementById('message');
+let images = [];
+let index = 0;
+let pinnedImage = null;
+
+function show(file) {
+  image.hidden = !file;
+  message.hidden = !!file;
+  if (file) image.src = imageUrl(file);
+}
+
+function advance() {
+  if (pinnedImage && images.includes(pinnedImage)) {
+    const url = imageUrl(pinnedImage);
+    if (image.src !== url || image.hidden) show(pinnedImage);
+    return;
+  }
+  show(images.length ? images[index++ % images.length] : null);
+}
+
+async function refresh() {
+  try {
+    images = await loadPlaylist();
+  } catch (error) {
+    console.warn('No signage playlist available', error);
+  }
+}
+
+image.onerror = () => show(null);
+connect(null, file => {
+  if (pinnedImage === file) return;
+  pinnedImage = file;
+  advance();
+}).catch(error => console.error('TV2 sync:', error));
+
+await refresh();
+advance();
+setInterval(advance, 10000);
+setInterval(async () => { await refresh(); if (pinnedImage) advance(); }, 60000);

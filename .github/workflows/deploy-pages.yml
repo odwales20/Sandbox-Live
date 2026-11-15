@@ -23,6 +23,8 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Generate signage playlist
+        run: python3 scripts/build_signage_playlist.py
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:

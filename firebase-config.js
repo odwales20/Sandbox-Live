@@ -1,5 +1,11 @@
-// Replace with your Firebase web app config from Firebase Console > Project settings.
-// Leave as null for local-only demo mode. The same Firebase project is used by TV1 and Control.
-export const firebaseConfig = null;
-// Example:
-// export const firebaseConfig = {apiKey:'...',authDomain:'...',projectId:'...',appId:'...'};
+// Firebase web app configuration for Sandbox Keswick Live.
+export const firebaseConfig = {
+  "projectId": "sandbox-keswick-live",
+  "appId": "1:1034059095336:web:1d9f554893c732a39c041d",
+  "storageBucket": "sandbox-keswick-live.firebasestorage.app",
+  "apiKey": "AIzaSyAnqwaXN1Swx8JYHartKIeTh2bvUnySSFs",
+  "authDomain": "sandbox-keswick-live.firebaseapp.com",
+  "messagingSenderId": "1034059095336",
+  "projectNumber": "1034059095336",
+  "version": "2"
+};

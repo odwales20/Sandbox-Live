@@ -14,14 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Regenerate image list
-        run: |
-          python3 - <<'PY'
-          import json, pathlib
-          p=pathlib.Path('signage')
-          files=sorted(x.name for x in p.iterdir() if x.is_file() and x.suffix.lower() in {'.png','.jpg','.jpeg','.webp','.gif'})
-          (p/'images.json').write_text(json.dumps(files,indent=2)+'\n')
-          print(files)
-          PY
+        run: python3 scripts/build_signage_playlist.py
       - name: Commit playlist if changed
         run: |
           if ! git diff --quiet -- signage/images.json; then

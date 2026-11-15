@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isStaff() {
+      return request.auth != null && request.auth.uid == 'QNafB1vlRyNSAoBZ02DSxHWsALk1';
+    }
+
+    // Public display data. All other documents are denied by default.
+    function validCompetition(data) {
+      let fields = [
+        'status', 'durationSeconds', 'remainingSeconds', 'endAt', 'finishAt',
+        'roundName', 'trucks', 'loads', 'updatedAt'
+      ];
+      return data.keys().hasAll(fields) && data.keys().hasOnly(fields)
+        && data.status in ['idle', 'running', 'paused', 'finished']
+        && data.durationSeconds is int && data.durationSeconds >= 60 && data.durationSeconds <= 14400
+        && data.remainingSeconds is int && data.remainingSeconds >= 0
+        && (data.endAt == null || data.endAt is int)
+        && (data.finishAt == null || data.finishAt is int)
+        && data.roundName is string && data.roundName.size() <= 80
+        && data.trucks is list && data.loads is list && data.updatedAt is int;
+    }
+
+    function validSignage(data) {
+      return data.keys().hasAll(['image']) && data.keys().hasOnly(['image'])
+        && (data.image == null || (data.image is string
+          && data.image.size() <= 255
+          && data.image.matches('^[^/]+[.](?i:png|jpe?g|webp|gif)$')));
+    }
+
+    match /sandboxLive/current {
+      allow get: if true;
+      allow create, update: if isStaff() && validCompetition(request.resource.data);
+    }
+
+    match /sandboxLive/tv2 {
+      allow get: if true;
+      allow create, update: if isStaff() && validSignage(request.resource.data);
+    }
+  }
+}
