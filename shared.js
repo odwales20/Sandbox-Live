@@ -7,7 +7,48 @@ export const configured=!!(firebaseConfig&&firebaseConfig.projectId&&firebaseCon
 export const weightUnits=(lb,oz)=>Math.round((Number(lb)*16+Number(oz))*10);
 export const displayWeight=(units)=>{const u=Math.max(0,Math.round(units));return {lb:Math.floor(u/160),oz:((u%160)/10).toFixed(1)}};
 export const truckTotals=s=>s.trucks.map(t=>{const loads=s.loads.filter(l=>l.truckId===t.id);return {...t,loads:loads.length,total:loads.reduce((v,l)=>v+weightUnits(l.lb,l.oz),0)}}).sort((a,b)=>b.total-a.total);
-export function remainingSeconds(s){if(s.status==='running'&&s.endAt)return Math.max(0,Math.ceil((s.endAt-Date.now())/1000));return Math.max(0,Number(s.remainingSeconds)||0)}
+let clockSample;
+let clockRequest;
+
+// Both displays estimate the same clock from the live site's HTTP Date header.
+export function competitionNow() {
+  if (!clockSample) return Date.now();
+  return Math.round(clockSample.time + performance.now() - clockSample.midpoint);
+}
+
+export function syncCompetitionClock() {
+  if (clockRequest) return clockRequest;
+  clockRequest = (async () => {
+    const before = performance.now();
+    const url = new URL('./build.json', import.meta.url);
+    url.searchParams.set('clock', Date.now());
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch(url, {method: 'HEAD', cache: 'no-store', signal: controller.signal});
+      const after = performance.now();
+      const time = Date.parse(response.headers.get('Date'));
+      const age = Number(response.headers.get('Age') || 0);
+      if (response.ok && Number.isFinite(time) && Number.isFinite(age)) {
+        clockSample = {time: time + age * 1000 + 500, midpoint: (before + after) / 2};
+      }
+    } catch {
+      // Retain the last valid sample when disconnected.
+    } finally {
+      clearTimeout(timeout);
+    }
+  })().finally(() => { clockRequest = null; });
+  return clockRequest;
+}
+
+export function remainingSeconds(state) {
+  const remaining = Math.max(0, Number(state.remainingSeconds) || 0);
+  if (state.status === 'running' && state.endAt) {
+    const countdown = Math.max(0, Math.ceil((state.endAt - competitionNow()) / 1000));
+    return Math.min(remaining, countdown);
+  }
+  return remaining;
+}
 export function cleanState(s){return {...defaultState(),...(s||{})};}
 
 export async function connect(onState, onSignage, onError = console.error) {

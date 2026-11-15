@@ -2,3 +2,4 @@
 /* Respect HTML's hidden attribute even on flex/grid layouts. */
 [hidden]{display:none!important}
 .staff-sign-out{margin-left:.5rem;padding:.4rem .65rem;font-size:.85rem}
+.remove-truck{display:block;margin-top:.65rem;padding:.45rem .65rem;font-size:.85rem}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}

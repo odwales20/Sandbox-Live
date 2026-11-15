@@ -1,10 +1,11 @@
 import {watchBuild} from '../updates.js';
 import {firebaseConfig} from '../firebase-config.js?v=2';
 import {loadPlaylist} from '../signage.js';
-import {connect,configured,defaultState,cleanState,displayWeight,truckTotals,remainingSeconds} from '../shared.js?v=4';
+import {connect,configured,defaultState,displayWeight,truckTotals,remainingSeconds,competitionNow,syncCompetitionClock} from '../shared.js?v=4';
 const el=id=>document.getElementById(id);let state=defaultState(),api=null,allowed=!configured,syncing=false;
 let signedIn = false;
 let pendingActions = 0;
+let savingCompetition = false;
 
 async function trackAction(action) {
   pendingActions++;
@@ -20,24 +21,91 @@ watchBuild(() => pendingActions === 0 && !resetAccount
 const setError=msg=>el('error').textContent=msg||'';
 const labelTime=sec=>`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
 const canWrite=()=>{if(!allowed){setError('Sign in to change the competition.');return false}return true};
-async function save(next){if(!canWrite())return;setError('');const previous=state;state=next;render();try{await trackAction(() => api.save(next))}catch(e){state=previous;render();setError(e.message||String(e))}}
+async function save(next) {
+  if (!canWrite() || savingCompetition) return false;
+  setError('');
+  const previous = state;
+  savingCompetition = true;
+  state = next;
+  render();
+  try {
+    await trackAction(() => api.save(next));
+    return true;
+  } catch (error) {
+    state = previous;
+    setError(error.message || String(error));
+    return false;
+  } finally {
+    savingCompetition = false;
+    render(false);
+  }
+}
 function onState(s){if(document.activeElement?.tagName==='INPUT'&&['pounds','ounces','newTruck','email','password','roundName','duration'].includes(document.activeElement.id)){state=s;render(false)}else{state=s;render(true)}}
-function render(refreshForm=true){el('status').textContent=state.status.toUpperCase();el('timer').textContent=labelTime(remainingSeconds(state));if(refreshForm){el('roundName').value=state.roundName||'';el('duration').value=Math.round(state.durationSeconds/60)||10}const trucks=truckTotals(state);const selection=el('truck').value;el('truck').innerHTML=state.trucks.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join('');if(state.trucks.some(t=>t.id===selection))el('truck').value=selection;el('scores').innerHTML=trucks.map((t,i)=>{const w=displayWeight(t.total);return `<div class="score ${i===0&&t.total>0?'leader':''}"><div>${i===0&&t.total>0?'🏆 ':''}${escapeHtml(t.name)}</div><strong>${w.lb} lb ${w.oz} oz</strong><span class="subtle">${t.loads} loads</span></div>`}).join('');el('loadCount').textContent=`(${state.loads.length})`;el('loads').innerHTML=state.loads.slice().reverse().map(l=>`<tr data-id="${escapeHtml(l.id)}"><td><select class="load-truck">${state.trucks.map(t=>`<option value="${escapeHtml(t.id)}" ${t.id===l.truckId?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}</select></td><td><input class="load-lb" type="number" min="0" step="1" value="${escapeHtml(l.lb)}"></td><td><input class="load-oz" type="number" min="0" max="15.9" step=".1" value="${escapeHtml(l.oz)}"></td><td><button class="danger delete" aria-label="Delete load">✕</button></td></tr>`).join('');el('operations').hidden=!allowed;el('authPanel').hidden=!configured||signedIn;el('signOut').hidden=!signedIn}
+function render(refreshForm=true){el('status').textContent=state.status.toUpperCase();el('timer').textContent=labelTime(remainingSeconds(state));if(refreshForm){el('roundName').value=state.roundName||'';el('duration').value=Math.round(state.durationSeconds/60)||10}renderCompetitionButtons();const trucks=truckTotals(state);const selection=el('truck').value;el('truck').innerHTML=state.trucks.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join('');if(state.trucks.some(t=>t.id===selection))el('truck').value=selection;el('scores').innerHTML=trucks.map((t,i)=>{const w=displayWeight(t.total);return `<div class="score ${i===0&&t.total>0?'leader':''}"><div>${i===0&&t.total>0?'🏆 ':''}${escapeHtml(t.name)}</div><strong>${w.lb} lb ${w.oz} oz</strong><span class="subtle">${t.loads} loads</span><button type="button" class="danger remove-truck" data-truck-id="${escapeHtml(t.id)}" ${savingCompetition?"disabled":""}>Delete truck<span class="sr-only"> ${escapeHtml(t.name)}</span></button></div>`}).join('')||'<p class="subtle">Add a truck to record loads.</p>';el('loadCount').textContent=`(${state.loads.length})`;el('loads').innerHTML=state.loads.slice().reverse().map(l=>`<tr data-id="${escapeHtml(l.id)}"><td><select class="load-truck">${state.trucks.map(t=>`<option value="${escapeHtml(t.id)}" ${t.id===l.truckId?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}</select></td><td><input class="load-lb" type="number" min="0" step="1" value="${escapeHtml(l.lb)}"></td><td><input class="load-oz" type="number" min="0" max="15.9" step=".1" value="${escapeHtml(l.oz)}"></td><td><button class="danger delete" aria-label="Delete load">✕</button></td></tr>`).join('');el('operations').hidden=!allowed;el('authPanel').hidden=!configured||signedIn;el('signOut').hidden=!signedIn}
 function escapeHtml(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;',"'":'&#39;'}[c]))}
 function weightOK(lb,oz){return Number.isInteger(Number(lb))&&String(lb).trim()!==''&&Number(lb)>=0&&Number(lb)<=9999&&Number.isFinite(Number(oz))&&String(oz).trim()!==''&&Number(oz)>=0&&Number(oz)<16&&Math.round(Number(oz)*10)===Number(oz)*10}
 function updated(changes){return {...state,...changes,updatedAt:Date.now()}}
-el('loadForm').addEventListener('submit',e=>{e.preventDefault();const lb=el('pounds').value,oz=el('ounces').value;if(!weightOK(lb,oz)){setError('Enter whole pounds and ounces from 0.0 to 15.9 in 0.1 oz steps.');return}save(updated({loads:[...state.loads,{id:crypto.randomUUID(),truckId:el('truck').value,lb:Number(lb),oz:Number(oz)}]})).then(()=>{el('pounds').value='';el('ounces').value='';el('pounds').focus()})});
-el('addTruckForm').addEventListener('submit',e=>{e.preventDefault();const name=el('newTruck').value.trim();if(!name)return;if(state.trucks.some(t=>t.name.toLowerCase()===name.toLowerCase())){setError('That truck already exists.');return}save(updated({trucks:[...state.trucks,{id:crypto.randomUUID(),name}]})).then(()=>el('newTruck').value='')});
+el('loadForm').addEventListener('submit',e=>{e.preventDefault();const truckId=el('truck').value;if(!state.trucks.some(truck=>truck.id===truckId))return;const lb=el('pounds').value,oz=el('ounces').value;if(!weightOK(lb,oz)){setError('Enter whole pounds and ounces from 0.0 to 15.9 in 0.1 oz steps.');return}save(updated({loads:[...state.loads,{id:crypto.randomUUID(),truckId,lb:Number(lb),oz:Number(oz)}]})).then(saved=>{if(!saved)return;el('pounds').value='';el('ounces').value='';el('pounds').focus()})});
+el('addTruckForm').addEventListener('submit',e=>{e.preventDefault();const name=el('newTruck').value.trim();if(!name)return;if(state.trucks.some(t=>t.name.toLowerCase()===name.toLowerCase())){setError('That truck already exists.');return}save(updated({trucks:[...state.trucks,{id:crypto.randomUUID(),name}]})).then(saved=>{if(saved)el('newTruck').value=''})});
 el('loads').addEventListener('click',e=>{const row=e.target.closest('tr');if(!row||!e.target.classList.contains('delete'))return;save(updated({loads:state.loads.filter(l=>l.id!==row.dataset.id)}))});
 el('loads').addEventListener('change',e=>{const row=e.target.closest('tr');if(!row)return;const lb=row.querySelector('.load-lb').value,oz=row.querySelector('.load-oz').value,truckId=row.querySelector('.load-truck').value;if(!weightOK(lb,oz)){setError('Invalid weight; ounces must be 0.0–15.9.');render();return}save(updated({loads:state.loads.map(l=>l.id===row.dataset.id?{...l,truckId,lb:Number(lb),oz:Number(oz)}:l)}))});
-el('start').onclick=()=>{const duration=Math.round(Number(el('duration').value)*60);if(!Number.isFinite(duration)||duration<60||duration>14400){setError('Set a timer between 1 and 240 minutes.');return}const title=el('roundName').value.trim()||'Truck Challenge';save(updated({roundName:title,durationSeconds:duration,remainingSeconds:duration,endAt:Date.now()+duration*1000,status:'running'}))};
-el('pause').onclick=()=>{if(state.status==='running')save(updated({remainingSeconds:remainingSeconds(state),endAt:null,status:'paused'}))};
-el('resume').onclick=()=>{if(state.status==='paused')save(updated({endAt:Date.now()+state.remainingSeconds*1000,status:'running'}))};
-el('finish').onclick=()=>{if(state.status!=='idle')save(updated({remainingSeconds:remainingSeconds(state),endAt:null,status:'finished',finishAt:Date.now()}))};
-el('reset').onclick=()=>{if(!confirm('Clear all competition scores and return TV1 to adverts?'))return;const next=defaultState();save(next)};
+function renderCompetitionButtons() {
+  const {status, trucks} = state;
+  el('start').disabled = savingCompetition || status === 'running' || status === 'paused';
+  el('pause').disabled = savingCompetition || status !== 'running';
+  el('resume').disabled = savingCompetition || status !== 'paused';
+  el('finish').disabled = savingCompetition || !['running', 'paused'].includes(status);
+  el('end').disabled = savingCompetition || status === 'idle';
+  el('reset').disabled = savingCompetition;
+  el('loadForm').querySelector('button').disabled = savingCompetition || !trucks.length;
+}
+
+el('scores').addEventListener('click', event => {
+  const button = event.target.closest('.remove-truck');
+  if (!button || !canWrite() || savingCompetition) return;
+  const truck = state.trucks.find(item => item.id === button.dataset.truckId);
+  if (!truck || !confirm(`Delete ${truck.name} and all its recorded loads?`)) return;
+  save(updated({
+    trucks: state.trucks.filter(item => item.id !== truck.id),
+    loads: state.loads.filter(load => load.truckId !== truck.id)
+  }));
+});
+
+el('start').onclick = () => {
+  const durationSeconds = Math.round(Number(el('duration').value) * 60);
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 60 || durationSeconds > 14400) {
+    setError('Set a timer between 1 and 240 minutes.');
+    return;
+  }
+  save(updated({
+    roundName: el('roundName').value.trim() || 'Truck Challenge',
+    durationSeconds,
+    remainingSeconds: durationSeconds,
+    endAt: competitionNow() + durationSeconds * 1000,
+    finishAt: null,
+    status: 'running'
+  }));
+};
+el('pause').onclick = () => save(updated({
+  remainingSeconds: remainingSeconds(state), endAt: null, status: 'paused'
+}));
+el('resume').onclick = () => save(updated({
+  endAt: competitionNow() + state.remainingSeconds * 1000, status: 'running'
+}));
+el('finish').onclick = () => save(updated({
+  remainingSeconds: remainingSeconds(state), endAt: null, status: 'finished', finishAt: competitionNow()
+}));
+el('end').onclick = () => save(updated({
+  remainingSeconds: remainingSeconds(state), endAt: null, status: 'idle', finishAt: state.finishAt ?? competitionNow()
+}));
+el('reset').onclick = () => {
+  if (!confirm('Clear all competition scores and return TV1 to adverts?')) return;
+  save({...defaultState(), trucks: state.trucks});
+};
+
 el('authForm').onsubmit=async e=>{e.preventDefault();setError('');try{await trackAction(() => api.signIn(el('email').value.trim(),el('password').value));el('password').value=''}catch(err){setError(err.message)}};
 el('signOut').onclick=()=>trackAction(() => api.signOut()).catch(e=>setError(e.message));
-setInterval(()=>{el('timer').textContent=labelTime(remainingSeconds(state));if(state.status==='running'&&remainingSeconds(state)===0&&allowed&&!syncing){syncing=true;save(updated({status:'finished',remainingSeconds:0,endAt:null,finishAt:Date.now()})).finally(()=>syncing=false)}},500);
+setInterval(()=>{el('timer').textContent=labelTime(remainingSeconds(state));if(state.status==='running'&&remainingSeconds(state)===0&&allowed&&!syncing&&!savingCompetition){syncing=true;save(updated({status:'finished',remainingSeconds:0,endAt:null,finishAt:competitionNow()})).finally(()=>syncing=false)}},250);
 let resetAccount = null;
 const resetStatus = message => { el('resetStatus').textContent = message; };
 
@@ -162,7 +230,7 @@ el('resetPassword').onclick = async () => {
   }
 };
 
-(async()=>{try{api=await connect(onState, onSignage, error => setError(error.message));el('connection').textContent=api.mode==='firebase'?'Firebase connected':'Local demo mode';el('mode').textContent=api.mode==='firebase'?'Competition changes appear live on TV1 and advert selections on TV2.':'Scores save in this browser only. Configure Firebase to sync phones and TVs.';api.onAuth(user => {
+(async()=>{try{await syncCompetitionClock();api=await connect(onState, onSignage, error => setError(error.message));el('connection').textContent=api.mode==='firebase'?'Firebase connected':'Local demo mode';el('mode').textContent=api.mode==='firebase'?'Competition changes appear live on TV1 and advert selections on TV2.':'Scores save in this browser only. Configure Firebase to sync phones and TVs.';api.onAuth(user => {
   signedIn = !!user;
   allowed = signedIn || api.mode === 'demo';
   if (signedIn) {
@@ -177,3 +245,5 @@ el('resetPassword').onclick = async () => {
   }
   render();
 });render()}catch(e){el('connection').textContent='Connection failed';setError(e.message||String(e))}})();
+
+setInterval(syncCompetitionClock, 60000);
