@@ -1,3 +1,4 @@
+import {firebaseConfig} from '../firebase-config.js?v=2';
 import {loadPlaylist} from '../signage.js';
 import {connect,configured,defaultState,cleanState,displayWeight,truckTotals,remainingSeconds} from '../shared.js?v=2';
 const el=id=>document.getElementById(id);let state=defaultState(),api=null,allowed=!configured,syncing=false;
@@ -22,6 +23,33 @@ el('reset').onclick=()=>{if(!confirm('Clear all competition scores and return TV
 el('authForm').onsubmit=async e=>{e.preventDefault();setError('');try{await api.signIn(el('email').value.trim(),el('password').value);el('password').value=''}catch(err){setError(err.message)}};
 el('signOut').onclick=()=>api.signOut().catch(e=>setError(e.message));
 setInterval(()=>{el('timer').textContent=labelTime(remainingSeconds(state));if(state.status==='running'&&remainingSeconds(state)===0&&allowed&&!syncing){syncing=true;save(updated({status:'finished',remainingSeconds:0,endAt:null,finishAt:Date.now()})).finally(()=>syncing=false)}},500);
+el('repairReset').onsubmit = event => {
+  event.preventDefault();
+  setError('');
+  try {
+    const input = el('resetLink');
+    const link = new URL(input.value.trim());
+    if (link.origin !== `https://${firebaseConfig.authDomain}`
+      || link.pathname !== '/__/auth/action'
+      || link.searchParams.get('mode') !== 'resetPassword'
+      || !link.searchParams.get('oobCode')) {
+      throw new Error('Paste the full Sandbox Live password reset link from your email.');
+    }
+
+    const reset = new URL('/__/auth/action', link.origin);
+    reset.searchParams.set('mode', 'resetPassword');
+    reset.searchParams.set('oobCode', link.searchParams.get('oobCode'));
+    reset.searchParams.set('apiKey', firebaseConfig.apiKey);
+    reset.searchParams.set('lang', 'en');
+    input.value = '';
+    window.location.assign(reset.href);
+  } catch (error) {
+    setError(error instanceof TypeError
+      ? 'Paste the full Sandbox Live password reset link from your email.'
+      : error.message);
+  }
+};
+
 let signageImage = null;
 let playlist = [];
 function onSignage(file) {
@@ -63,7 +91,7 @@ el('resetPassword').onclick = async () => {
   try {
     setError('');
     await api.resetPassword(email.value.trim());
-    el('authMessage').textContent = 'Check your inbox for a password setup link.';
+    el('authMessage').textContent = 'Check your inbox for a password setup link. If it shows an error, use the reset link option below.';
   } catch (error) {
     setError(error.message);
   }
